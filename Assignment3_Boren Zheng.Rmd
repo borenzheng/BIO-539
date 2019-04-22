@@ -1,0 +1,172 @@
+---
+title: "Data Analysis Report"
+author: "Boren Zheng"
+date: "4/20/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Fed RD Spending Analysis
+
+```{r include=FALSE}
+fed<-read.csv("fed_r_d_spending.csv")
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(reshape2)
+```
+
+The "fed_r_d_spending" dataset contains `r nrow(fed)` objects of `r length(fed)` variables. The first 6 rows of the dataset are shown as following:
+
+```{r echo=FALSE}
+head(fed)
+```
+
+
+### Univariate analysis with plots
+
+The histograms of each numeric variable are shown as following:
+
+```{r fed, echo=FALSE,warning=FALSE,message=FALSE}
+library(ggplot2)
+library(tidyr)
+fed.numeric<- fed[,sapply(fed, is.numeric)]
+ggplot(gather(fed.numeric), aes(value)) + 
+  geom_histogram(colour = 'black',fill = 'lightblue') +
+  facet_wrap(~key, scales = 'free')
+```
+
+### Multivariate analysis with plots
+
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+
+ordered_lengend <- filter(fed, year == max(fed$year))%>%
+  arrange(desc(rd_budget))%>%
+  pull(department)
+ggplot(fed, aes(year, rd_budget, color=department))+
+  geom_point()+scale_color_discrete(breaks = ordered_lengend) +
+  scale_y_log10() +
+  geom_smooth(method = 'lm')+
+  scale_x_continuous(breaks = seq(min(fed$year),max(fed$year),5))+
+  theme_bw()+
+  ggtitle("RD budget of different departments over time")
+```
+
+
+The plot above shows the relationships between RD budget and time based on different departments.We can see that RD budgets is independent of time because not all departments have increasing RD budgets over time.The RD budget of the Department of Defense are the highest all the time.
+
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+
+fed_sum <- group_by(fed, year) %>%
+  summarise(total_rd = sum(rd_budget))
+
+fed_new <- left_join(fed, fed_sum, by = 'year')
+
+ggplot(fed_new, aes(x = total_rd, y = gdp, color = year)) +
+  geom_point() + labs(x = "Total RD Budget", color = "Year", y = "GDP") +
+  theme_bw()+
+  ggtitle("Relationships between Yearly Total RD Budget and GDP") + geom_smooth(method = "lm")
+```
+The polt above shows the relationships between yearly total RD budget and GDP. It shows that GDP has a positive correlation with total RD budget. And we could see that both GDP and total RD budget are increasing over time.
+
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+library(reshape2)
+fed_sub = fed_new[,c("year", "total_outlays",
+                         "discretionary_outlays","total_rd")]
+
+new <- !duplicated(fed_sub)
+
+fed_sub <- fed_sub[new,]
+
+fed_sub <- melt(fed_sub,id = c("year"))
+
+ggplot(fed_sub, aes(x = year, y = value, color = variable))+
+geom_point() + geom_smooth(method = 'lm') + 
+  labs(x = "Year", y = "Value", color = "", 
+       title = "Total Outlays, Discretionary Outlays and Total RD Budget") +
+  theme_bw()+
+  scale_x_continuous(breaks = seq(min(fed$year),max(fed$year),5))
+```
+The plot above shows that both total outlays and discretionary outlays are increasing over time but total RD budget doesn't have significant change.
+
+
+## Model: least square regression
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+model <- lm(gdp ~ ., data = fed)
+```
+Set gdp as the response variable, all predictors are in the model.
+The R-squared of this model is `r summary(model)$r.square`, p-value is `r summary(model)$p.value` 2.2e-16. ANOVA is used to test this models.
+```{r echo=FALSE,Trning=FALSE,message=FALSE}
+anova(model)
+```
+
+
+## Climate Spending Analysis
+
+```{r, echo = FALSE,warning=FALSE,message=FALSE}
+climate <- read.csv("climate_spending.csv")
+p<-ggplot(climate, aes(x = year, y = gcc_spending, color = department))+
+  geom_point()
+ordered <- filter(climate, year == max(climate$year)) %>%
+  arrange(desc(gcc_spending)) %>% pull(department)
+
+    p+geom_point()+scale_color_discrete(breaks = ordered) +
+  scale_y_log10() +
+  geom_smooth(method = 'lm')+
+  scale_x_continuous(breaks = seq(min(climate$year),max(climate$year),5))+
+  theme_bw()+
+  ggtitle("GCC Spending Over Time")     
+```
+
+
+The plot above shows the relationships between gcc spending and time based on different departments. Most of the departments have increasing gcc spending over time. 
+
+
+## Energy Spending Analysis
+
+```{r, echo = FALSE,warning=FALSE,message=FALSE}
+energy <- read.csv("energy_spending.csv")
+p<-ggplot(energy, aes(x = year, y = energy_spending, color = department))+
+  geom_point()
+ordered2 <- filter(energy, year == max(energy$year)) %>%
+  arrange(desc(energy_spending)) %>% pull(department)
+
+    p+geom_point()+scale_color_discrete(breaks = ordered2) +
+  scale_y_log10() +
+  geom_smooth(method = 'lm')+
+  scale_x_continuous(breaks = seq(min(energy$year),max(energy$year),5))+
+  theme_bw()+
+  ggtitle("Energy Spending Over Time")     
+```
+
+The plot above shows the relationships between energy spending and time based on different departments. The department of Nuclear Energy has significant increasing energy spending over time. 
+
+
+```{r echo = FALSE}
+climate_sub <- group_by(climate, year) %>%
+  summarise(gcc_total = sum(gcc_spending))
+
+energy_sub <- group_by(energy, year) %>% 
+  summarise(energy_total = sum(energy_spending))
+
+climate_energy <- inner_join(climate_sub, energy_sub, by = "year")
+
+climate_energy <- melt(climate_energy, id = 'year')
+
+ggplot(climate_energy, aes(x = year, y = value, color = variable))+
+geom_point() + 
+  labs(x = "Year", y = "Value", color = "", 
+       title = "Total GCC Spending VS Total Energy Spending Over Time") + 
+   theme_bw()+
+  scale_color_discrete(labels= c("Total GCC Spending", 
+                                 "Total Engery Spending"))
+
+```
+
+The plot above shows that the total energy spending is much higher than total GCC spending. Also, the total energy spending is increasing over time. 
